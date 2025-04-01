@@ -32,8 +32,8 @@ def main():
         
         print("Requested path:", repr(path))
         
-        # Return 200 OK only if the path is exactly "/index.html"; 404 otherwise.
-        if path == "/index.html":
+        # Return 200 OK if the path is "/" or "/index.html"; 404 otherwise.
+        if path == "/" or path == "/index.html":
             response = "HTTP/1.1 200 OK\r\n\r\n"
         else:
             response = "HTTP/1.1 404 Not Found\r\n\r\n"
