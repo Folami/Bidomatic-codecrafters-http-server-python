@@ -74,6 +74,7 @@ def main():
         conn, addr = server_socket.accept()
         # Create a new thread to handle the connection.
         client_thread = threading.Thread(target=handle_client, args=(conn, addr))
-        client_thread.start(
+        client_thread.start()
+
 if __name__ == "__main__":
     main()
