@@ -46,6 +46,24 @@ def main():
             response += "Content-Length: " + str(content_length) + "\r\n"
             response += "\r\n"
             response += echo_body
+        elif path == "/user-agent":
+            user_agent = ""
+            # Iterate over header lines (everything after the request line)
+            for line in request_lines[1:]:
+                # An empty line marks end of headers.
+                if line == "":
+                    break
+                # Look for the User-Agent header (case-insensitive).
+                if line.lower().startswith("user-agent:"):
+                    # Split on ":", then strip whitespace.
+                    user_agent = line.split(":", 1)[1].strip()
+                    break
+            content_length = len(user_agent.encode("utf-8"))
+            response = "HTTP/1.1 200 OK\r\n"
+            response += "Content-Type: text/plain\r\n"
+            response += "Content-Length: " + str(content_length) + "\r\n"
+            response += "\r\n"
+            response += user_agent
         else:
             response = "HTTP/1.1 404 Not Found\r\n\r\n"
             
