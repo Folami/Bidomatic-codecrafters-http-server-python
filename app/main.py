@@ -32,9 +32,20 @@ def main():
         
         print("Requested path:", repr(path))
         
-        # Return 200 OK if the path is "/" or "/index.html"; 404 otherwise.
+        # Handle endpoints.
         if path == "/" or path == "/index.html":
             response = "HTTP/1.1 200 OK\r\n\r\n"
+        elif path.startswith("/echo/"):
+            # Extract the string following "/echo/"
+            echo_body = path[len("/echo/"):]
+            # Determine byte length of body (assumes UTF-8 encoding).
+            content_length = len(echo_body.encode("utf-8"))
+            # Build response with required headers.
+            response = "HTTP/1.1 200 OK\r\n"
+            response += "Content-Type: text/plain\r\n"
+            response += "Content-Length: " + str(content_length) + "\r\n"
+            response += "\r\n"
+            response += echo_body
         else:
             response = "HTTP/1.1 404 Not Found\r\n\r\n"
             
