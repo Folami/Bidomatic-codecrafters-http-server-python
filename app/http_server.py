@@ -4,6 +4,7 @@ import socket
 import threading
 from io import BytesIO
 from app.http_client import HttpClient
+import gzip  # Add this import at the top of the file if not already present
 
 
 class HttpServer:
@@ -92,13 +93,20 @@ class HttpServer:
         # Strip off the /echo/ prefix
         echo_body = request.get_path()[6:]  # Python's string slicing
         body_bytes = echo_body.encode('utf-8')
-        headers = "HTTP/1.1 200 OK\r\n"
-        headers += "Content-Type: text/plain\r\n"
         if request.client_accepts_gzip():
+            compressed_body = gzip.compress(body_bytes)
+            headers = "HTTP/1.1 200 OK\r\n"
+            headers += "Content-Type: text/plain\r\n"
             headers += "Content-Encoding: gzip\r\n"
-        headers += f"Content-Length: {len(body_bytes)}\r\n\r\n"
-        response.write(headers)
-        response.write(body_bytes)
+            headers += f"Content-Length: {len(compressed_body)}\r\n\r\n"
+            response.write(headers)
+            response.write(compressed_body)
+        else:
+            headers = "HTTP/1.1 200 OK\r\n"
+            headers += "Content-Type: text/plain\r\n"
+            headers += f"Content-Length: {len(body_bytes)}\r\n\r\n"
+            response.write(headers)
+            response.write(body_bytes)
 
     def handle_user_agent_endpoint(self, request, response):
         user_agent = request.get_header("user-agent")
