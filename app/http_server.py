@@ -72,19 +72,23 @@ class HttpServer:
 
 
     def process_request(self, request, response):
-        path = request.get_path()
-        method = request.get_method()
-        
-        if path in ["/", "/index.html"]:
-            self.handle_root_endpoint(response)
-        elif path.startswith("/echo/"):
-            self.handle_echo_endpoint(request, response)
-        elif path == "/user-agent":
-            self.handle_user_agent_endpoint(request, response)
-        elif path.startswith("/files/"):
-            self.handle_files_endpoint(request, response)
-        else:
-            response.write("HTTP/1.1 404 Not Found\r\n\r\n")
+        try:
+            path = request.get_path()
+            method = request.get_method()
+            
+            if path in ["/", "/index.html"]:
+                self.handle_root_endpoint(response)
+            elif path.startswith("/echo/"):
+                self.handle_echo_endpoint(request, response)
+            elif path == "/user-agent":
+                self.handle_user_agent_endpoint(request, response)
+            elif path.startswith("/files/"):
+                self.handle_files_endpoint(request, response)
+            else:
+                response.write("HTTP/1.1 404 Not Found\r\n\r\n")
+        except Exception as e:
+            print(f"Error processing request: {e}")
+            response.write("HTTP/1.1 500 Internal Server Error\r\n\r\n")
 
     def handle_root_endpoint(self, response):
         response.write("HTTP/1.1 200 OK\r\n\r\n")
