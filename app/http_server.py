@@ -1,103 +1,110 @@
 import socket
-import threading
-import os
 import sys
+import os
+import threading
 from app.http_client import HttpClient
 
 
 class HttpServer:
-    def __init__(self, args, port=4221):
-        self.port = port
-        self.files_directory = None
-        self.parse_command_line_args(args)
-
-    def parse_command_line_args(self, args):
-        for i in range(len(args)):
-            if args[i] == "--directory" and i + 1 < len(args):
-                self.files_directory = args[i + 1]
-                if not os.path.exists(self.files_directory) or not os.path.isdir(self.files_directory):
-                    print("Error: Provided directory does not exist or is not valid.", file=sys.stderr)
+    def __init__(self, args):
+        self.args = args
+        self.port = 4221
+        self.directory = None
+        if "--directory" in args:
+            idx = args.index("--directory") + 1
+            if idx < len(args):
+                self.directory = args[idx]
+                if not os.path.isdir(self.directory):
+                    print("Error: Provided directory does not exist.")
                     sys.exit(1)
+            else:
+                print("Error: --directory flag provided without a path.")
+                sys.exit(1)
+        self.server_socket = socket.create_server(("localhost", self.port), reuse_port=True)
 
     def start(self):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
-            server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            server_socket.bind(('', self.port))
-            server_socket.listen()
-            print(f"Server listening on port: {self.port}")
-            
-            while True:
-                client_socket, addr = server_socket.accept()
-                print(f"Accepted connection from {addr[0]}:{addr[1]}")
-                client_handler = HttpClient(client_socket, self)
-                threading.Thread(target=client_handler.run).start()
+        print("Server listening on port:", self.port)
+        while True:
+            conn, addr = self.server_socket.accept()
+            print("Accepted connection from", addr)
+            threading.Thread(target=self.handle_client, args=(conn,)).start()
 
-    def process_request(self, request, response):
-        path = request.get_path()
-        method = request.get_method()
-        
-        if path in ["/", "/index.html"]:
-            self.handle_root_endpoint(response)
-        elif path.startswith("/echo/"):
-            self.handle_echo_endpoint(request, response)
-        elif path == "/user-agent":
-            self.handle_user_agent_endpoint(request, response)
-        elif path.startswith("/files/"):
-            self.handle_files_endpoint(request, response)
-        else:
-            response.write("HTTP/1.1 404 Not Found\r\n\r\n")
-
-    def handle_root_endpoint(self, response):
-        response.write("HTTP/1.1 200 OK\r\n\r\n")
-
-    def handle_echo_endpoint(self, request, response):
-        echo_body = request.get_path()[6:]  # Strip "/echo/"
-        body_bytes = echo_body.encode('utf-8')
-        headers = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n"
-        if request.client_accepts_gzip():
-            headers += "Content-Encoding: gzip\r\n"
-        headers += f"Content-Length: {len(body_bytes)}\r\n\r\n"
-        response.write(headers)
-        response.write(body_bytes)
-
-    def handle_user_agent_endpoint(self, request, response):
-        user_agent = request.get_header("user-agent")
-        ua_bytes = user_agent.encode('utf-8')
-        headers = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n"
-        if request.client_accepts_gzip():
-            headers += "Content-Encoding: gzip\r\n"
-        headers += f"Content-Length: {len(ua_bytes)}\r\n\r\n"
-        response.write(headers)
-        response.write(ua_bytes)
-
-    def handle_files_endpoint(self, request, response):
-        if not self.files_directory:
-            response.write("HTTP/1.1 500 Internal Server Error\r\n\r\n")
-            return
-        
-        filename = request.get_path()[7:]  # Strip "/files/"
-        file_path = os.path.join(self.files_directory, filename)
-        
-        if request.get_method() == "GET":
-            self.handle_get_request(file_path, response)
-        elif request.get_method() == "POST":
-            self.handle_post_request(file_path, request, response)
-        else:
-            response.write("HTTP/1.1 405 Method Not Allowed\r\n\r\n")
-
-    def handle_get_request(self, file_path, response):
-        if os.path.exists(file_path) and os.path.isfile(file_path):
-            with open(file_path, 'rb') as f:
-                file_bytes = f.read()
-            response.write(f"HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {len(file_bytes)}\r\n\r\n")
-            response.write(file_bytes)
-        else:
-            response.write("HTTP/1.1 404 Not Found\r\n\r\n")
-
-    def handle_post_request(self, file_path, request, response):
+    def handle_client(self, conn):
         try:
-            with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(request.get_body())
-            response.write("HTTP/1.1 201 Created\r\n\r\n")
-        except IOError:
-            response.write("HTTP/1.1 500 Internal Server Error\r\n\r\n")
+            method, path, headers, body = self.read_http_request(conn)
+            # Process /files/{filename} endpoint for POST method.
+            if path.startswith("/files/"):
+                filename = path[len("/files/"):]
+                full_path = os.path.join(self.directory, filename) if self.directory else None
+                if method.upper() == "POST":
+                    # Write the request body to the new file.
+                    try:
+                        with open(full_path, "w", encoding="utf-8") as f:
+                            f.write(body)
+                        response = "HTTP/1.1 201 Created\r\n\r\n"
+                    except Exception as e:
+                        print("Error writing file:", e)
+                        response = "HTTP/1.1 500 Internal Server Error\r\n\r\n"
+                else:
+                    # For GET or other methods you can add additional handling.
+                    if full_path and os.path.isfile(full_path):
+                        try:
+                            with open(full_path, "rb") as f:
+                                file_bytes = f.read()
+                            response_headers  = "HTTP/1.1 200 OK\r\n"
+                            response_headers += "Content-Type: application/octet-stream\r\n"
+                            response_headers += "Content-Length: " + str(len(file_bytes)) + "\r\n"
+                            response_headers += "\r\n"
+                            conn.sendall(response_headers.encode("utf-8") + file_bytes)
+                            conn.close()
+                            return
+                        except Exception as e:
+                            print("Error reading file:", e)
+                            response = "HTTP/1.1 500 Internal Server Error\r\n\r\n"
+                    else:
+                        response = "HTTP/1.1 404 Not Found\r\n\r\n"
+            else:
+                # Other endpoints: simple 200 OK response.
+                response = "HTTP/1.1 200 OK\r\n\r\n"
+            conn.sendall(response.encode("utf-8"))
+        except Exception as err:
+            print("Error handling request:", err)
+        finally:
+            conn.close()
+
+    def read_http_request(self, conn):
+        buffer = b""
+        # Read until headers complete (i.e. until "\r\n\r\n" is found)
+        while b"\r\n\r\n" not in buffer:
+            data = conn.recv(1024)
+            if not data:
+                break
+            buffer += data
+
+        header_part, sep, body_part = buffer.partition(b"\r\n\r\n")
+        header_text = header_part.decode("utf-8", errors="replace")
+        lines = header_text.split("\r\n")
+        if not lines:
+            raise Exception("Invalid HTTP request")
+        # Parse request line.
+        request_line = lines[0]
+        parts = request_line.split(" ")
+        if len(parts) < 3:
+            raise Exception("Invalid request line")
+        method = parts[0]
+        path = parts[1]
+        # Parse headers.
+        headers = {}
+        for line in lines[1:]:
+            if ":" in line:
+                key, value = line.split(":", 1)
+                headers[key.strip().lower()] = value.strip()
+        content_length = int(headers.get("content-length", "0"))
+        body = body_part
+        # If we haven't yet received the full body, read the remaining bytes.
+        while len(body) < content_length:
+            data = conn.recv(content_length - len(body))
+            if not data:
+                break
+            body += data
+        return method, path, headers, body.decode("utf-8", errors="replace")
