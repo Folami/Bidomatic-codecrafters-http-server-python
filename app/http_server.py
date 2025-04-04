@@ -89,6 +89,7 @@ class HttpServer:
     def handle_root_endpoint(self, response):
         response.write("HTTP/1.1 200 OK\r\n\r\n")
 
+
     def handle_echo_endpoint(self, request, response):
         # Strip off the /echo/ prefix
         echo_body = request.get_path()[6:]  # Python's string slicing
