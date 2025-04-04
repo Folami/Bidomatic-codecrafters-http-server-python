@@ -32,6 +32,30 @@ class HttpServer:
         try:
             method, path, headers, body = self.read_http_request(client_socket)
             
+            if path.startswith("/echo/"):
+                # Extract the text to echo from the path
+                echo_text = path[len("/echo/"):]
+                # Check if client accepts gzip encoding
+                accept_encoding = headers.get("accept-encoding", "")
+                
+                if "gzip" in accept_encoding.lower():
+                    # Use gzip compression
+                    import gzip
+                    content = gzip.compress(echo_text.encode('utf-8'))
+                    response = "HTTP/1.1 200 OK\r\n"
+                    response += "Content-Type: text/plain\r\n"
+                    response += "Content-Encoding: gzip\r\n"
+                    response += f"Content-Length: {len(content)}\r\n\r\n"
+                    client_socket.sendall(response.encode('utf-8') + content)
+                else:
+                    # No compression
+                    content = echo_text.encode('utf-8')
+                    response = "HTTP/1.1 200 OK\r\n"
+                    response += "Content-Type: text/plain\r\n"
+                    response += f"Content-Length: {len(content)}\r\n\r\n"
+                    client_socket.sendall(response.encode('utf-8') + content)
+                return
+            
             if path.startswith("/files/"):
                 filename = path[len("/files/"):]
                 full_path = os.path.join(self.directory, filename) if self.directory else None
