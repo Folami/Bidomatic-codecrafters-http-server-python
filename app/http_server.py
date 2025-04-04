@@ -32,6 +32,16 @@ class HttpServer:
         try:
             method, path, headers, body = self.read_http_request(client_socket)
             
+            # Add /user-agent endpoint handling
+            if path == "/user-agent":
+                user_agent = headers.get("user-agent", "")
+                body_bytes = user_agent.encode('utf-8')
+                response = "HTTP/1.1 200 OK\r\n"
+                response += "Content-Type: text/plain\r\n"
+                response += f"Content-Length: {len(body_bytes)}\r\n\r\n"
+                client_socket.sendall(response.encode('utf-8') + body_bytes)
+                return
+            
             # Add root path handling at the start
             if path == "/" or path == "/index.html":
                 response = "HTTP/1.1 200 OK\r\n\r\n"
