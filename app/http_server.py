@@ -26,15 +26,40 @@ class HttpServer:
     def start(self):
         print("Server listening on port:", self.port)
         while True:
-            client_socket, addr = self.server_socket.accept()
+            conn, addr = self.server_socket.accept()
             print("Accepted connection from", addr)
-            threading.Thread(target=self.handle_client, args=(client_socket,)).start()
+            threading.Thread(target=self.handle_client, args=(conn,)).start()
 
-    def handle_client(self, client_socket):
+    def handle_client(self, conn):
         try:
-            method, path, headers, body = self.read_http_request(client_socket)
-            # Process /files endpoint for POST requests.
-            if path.startswith("/files/"):
+            method, path, headers, body = self.read_http_request(conn)
+            # Fix: if request is for the root, return 200 OK instead of 404.
+            if path == "/" or path == "/index.html":
+                response = "HTTP/1.1 200 OK\r\n\r\n"
+            elif path.startswith("/echo/"):
+                echo_body = path[len("/echo/"):]
+                # Check if client supports gzip encoding.
+                accept_encoding = headers.get("accept-encoding", "")
+                if "gzip" in accept_encoding.lower():
+                    # Compress the response body.
+                    compressed_body = gzip.compress(echo_body.encode("utf-8"))
+                    response_header  = "HTTP/1.1 200 OK\r\n"
+                    response_header += "Content-Type: text/plain\r\n"
+                    response_header += "Content-Encoding: gzip\r\n"
+                    response_header += "Content-Length: " + str(len(compressed_body)) + "\r\n"
+                    response_header += "\r\n"
+                    conn.sendall(response_header.encode("utf-8") + compressed_body)
+                else:
+                    # No compression.
+                    body_bytes = echo_body.encode("utf-8")
+                    response_header  = "HTTP/1.1 200 OK\r\n"
+                    response_header += "Content-Type: text/plain\r\n"
+                    response_header += "Content-Length: " + str(len(body_bytes)) + "\r\n"
+                    response_header += "\r\n"
+                    conn.sendall(response_header.encode("utf-8") + body_bytes)
+                conn.close()
+                return
+            elif path.startswith("/files/"):
                 filename = path[len("/files/"):]
                 full_path = os.path.join(self.directory, filename) if self.directory else None
                 if method.upper() == "POST":
@@ -53,8 +78,8 @@ class HttpServer:
                             response_headers  = "HTTP/1.1 200 OK\r\n"
                             response_headers += "Content-Type: application/octet-stream\r\n"
                             response_headers += "Content-Length: " + str(len(file_bytes)) + "\r\n\r\n"
-                            client_socket.sendall(response_headers.encode("utf-8") + file_bytes)
-                            client_socket.close()
+                            conn.sendall(response_headers.encode("utf-8") + file_bytes)
+                            conn.close()
                             return
                         except Exception as e:
                             print("Error reading file:", e)
@@ -63,43 +88,19 @@ class HttpServer:
                         response = "HTTP/1.1 404 Not Found\r\n\r\n"
                 else:
                     response = "HTTP/1.1 405 Method Not Allowed\r\n\r\n"
-            # Handle other endpoints (for brevity, only echo endpoint below)
-            elif path.startswith("/echo/"):
-                echo_body = path[len("/echo/"):]
-                # Check if client supports gzip encoding.
-                accept_encoding = headers.get("accept-encoding", "")
-                if "gzip" in accept_encoding.lower():
-                    # Compress the response body.
-                    compressed_body = gzip.compress(echo_body.encode("utf-8"))
-                    response_header  = "HTTP/1.1 200 OK\r\n"
-                    response_header += "Content-Type: text/plain\r\n"
-                    response_header += "Content-Encoding: gzip\r\n"
-                    response_header += "Content-Length: " + str(len(compressed_body)) + "\r\n"
-                    response_header += "\r\n"
-                    client_socket.sendall(response_header.encode("utf-8") + compressed_body)
-                else:
-                    # No compression.
-                    body_bytes = echo_body.encode("utf-8")
-                    response_header  = "HTTP/1.1 200 OK\r\n"
-                    response_header += "Content-Type: text/plain\r\n"
-                    response_header += "Content-Length: " + str(len(body_bytes)) + "\r\n"
-                    response_header += "\r\n"
-                    client_socket.sendall(response_header.encode("utf-8") + body_bytes)
-                client_socket.close()
-                return
             else:
                 response = "HTTP/1.1 404 Not Found\r\n\r\n"
-            client_socket.sendall(response.encode("utf-8"))
+            conn.sendall(response.encode("utf-8"))
         except Exception as err:
             print("Error handling request:", err)
         finally:
-            client_socket.close()
+            conn.close()
 
-    def read_http_request(self, client_socket):
+    def read_http_request(self, conn):
         buffer = b""
         # Read until headers are complete ("\r\n\r\n" found)
         while b"\r\n\r\n" not in buffer:
-            data = client_socket.recv(1024)
+            data = conn.recv(1024)
             if not data:
                 break
             buffer += data
@@ -131,7 +132,7 @@ class HttpServer:
         body = remainder
         # If the already-read body is shorter than content_length, read the rest.
         while len(body) < content_length:
-            data = client_socket.recv(content_length - len(body))
+            data = conn.recv(content_length - len(body))
             if not data:
                 break
             body += data
