@@ -109,6 +109,7 @@ class HttpServer:
             response.write(headers)
             response.write(body_bytes)
 
+
     def handle_user_agent_endpoint(self, request, response):
         user_agent = request.get_header("user-agent")
         ua_bytes = user_agent.encode('utf-8')

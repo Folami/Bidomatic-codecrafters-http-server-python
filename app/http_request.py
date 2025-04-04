@@ -1,5 +1,3 @@
-
-
 class HttpRequest:
     def __init__(self, method, path, request_lines):
         self.method = method
@@ -65,8 +63,8 @@ class HttpRequest:
 
 
     def client_accepts_gzip(self):
-        for header in self.request_lines:
-            if header.lower().startswith("accept-encoding:"):
-                encodings = header[len("accept-encoding:"):].strip().lower()
-                return "gzip" in encodings
+        # Retrieve the Accept-Encoding header and check if it contains gzip (case-insensitive)
+        encoding = self.get_header("accept-encoding")
+        if encoding and "gzip" in encoding.lower():
+            return True
         return False
