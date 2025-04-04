@@ -65,8 +65,9 @@ class HttpServer:
         print("Server listening on port:", self.port)
         while True:
             client_socket, addr = self.server_socket.accept()
-            print("Accepted connection from ", addr)
-            threading.Thread(target=HttpClient, args=(client_socket,)).start()
+            print("Accepted connection from", addr)
+            # Pass the required 'server' argument when creating HttpClient
+            threading.Thread(target=HttpClient, args=(client_socket, self)).start()
 
 
     def process_request(self, request, response):
