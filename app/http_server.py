@@ -114,19 +114,20 @@ class HttpServer:
                 full_path = os.path.join(self.directory, filename) if self.directory else None
                 
                 if method.upper() == "POST":
-                    if full_path:
+                    if not full_path:
+                        response = "HTTP/1.1 404 Not Found\r\n\r\n"
+                    else:
                         try:
-                            with open(full_path, "wb") as f:
+                            # Write the request body to file
+                            with open(full_path, 'wb') as f:
                                 f.write(body.encode('utf-8'))
                             response = "HTTP/1.1 201 Created\r\n\r\n"
-                            client_socket.sendall(response.encode('utf-8'))
                         except Exception as e:
                             print(f"Error writing file: {e}")
                             response = "HTTP/1.1 500 Internal Server Error\r\n\r\n"
-                            client_socket.sendall(response.encode('utf-8'))
-                    else:
-                        response = "HTTP/1.1 404 Not Found\r\n\r\n"
-                        client_socket.sendall(response.encode('utf-8'))
+                    client_socket.sendall(response.encode('utf-8'))
+                    return
+                
                 elif method.upper() == "GET":
                     if full_path and os.path.isfile(full_path):
                         try:
