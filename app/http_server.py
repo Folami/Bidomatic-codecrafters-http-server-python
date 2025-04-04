@@ -9,17 +9,53 @@ class HttpServer:
         self.args = args
         self.port = 4221
         self.directory = None
-        if "--directory" in args:
-            idx = args.index("--directory") + 1
-            if idx < len(args):
-                self.directory = args[idx]
+        self.server_socket = socket.create_server(("localhost", self.port), reuse_port=True)
+
+
+    def parse_command_line_args(self):
+        # Parse for --directory flag.
+        if "--directory" in self.args:
+            idx = self.args.index("--directory") + 1
+            if idx < len(self.args):
+                self.directory = self.args[idx]
                 if not os.path.isdir(self.directory):
                     print("Error: Provided directory does not exist.")
                     sys.exit(1)
             else:
                 print("Error: --directory flag provided without a path.")
                 sys.exit(1)
-        self.server_socket = socket.create_server(("localhost", self.port), reuse_port=True)
+        # Check for other flags if needed.
+        if "--port" in self.args:
+            idx = self.args.index("--port") + 1
+            if idx < len(self.args):
+                try:
+                    self.port = int(self.args[idx])
+                except ValueError:
+                    print("Error: Invalid port number.")
+                    sys.exit(1)
+            else:
+                print("Error: --port flag provided without a port number.")
+                sys.exit(1)
+        # Check for other flags if needed.
+        if "--help" in self.args:
+            print("Usage: python http_server.py [--directory <path>] [--port <port>]")
+            sys.exit(0)
+        # Check for other flags if needed.
+        if "--version" in self.args:
+            print("HTTP Server version 1.0")
+            sys.exit(0)
+        # Check for other flags if needed.
+        if "--verbose" in self.args:
+            print("Verbose mode enabled.")
+            # Add verbose handling here if needed.
+        # Check for other flags if needed.
+        if "--quiet" in self.args:
+            print("Quiet mode enabled.")
+            # Add quiet handling here if needed.
+        # Check for other flags if needed.
+        if "--debug" in self.args:
+            print("Debug mode enabled.")
+            # Add debug handling here if needed.
 
     def start(self):
         print("Server listening on port:", self.port)
@@ -27,6 +63,7 @@ class HttpServer:
             client_socket, addr = self.server_socket.accept()
             print("Accepted connection from", addr)
             threading.Thread(target=self.handle_client, args=(client_socket,)).start()
+
 
     def handle_client(self, client_socket):
         try:
