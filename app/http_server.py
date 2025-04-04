@@ -32,6 +32,12 @@ class HttpServer:
         try:
             method, path, headers, body = self.read_http_request(client_socket)
             
+            # Add root path handling at the start
+            if path == "/" or path == "/index.html":
+                response = "HTTP/1.1 200 OK\r\n\r\n"
+                client_socket.sendall(response.encode('utf-8'))
+                return
+                
             if path.startswith("/echo/"):
                 # Extract the text to echo from the path
                 echo_text = path[len("/echo/"):]
