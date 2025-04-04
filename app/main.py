@@ -4,6 +4,7 @@ import os
 import sys
 from io import BytesIO
 
+
 class HttpServer:
     def __init__(self, args, port=4221):
         self.port = port
@@ -125,11 +126,11 @@ class ClientHandler:
             print(f"Error handling client: {e}", file=sys.stderr)
 
 class HttpRequest:
-    def __init__(self, method, path, request_lines):
+    def __init__(self, method, path, request_lines, body=""):
         self.method = method
         self.path = path
         self.request_lines = request_lines
-        self.body = ""
+        self.body = body
 
     def get_method(self):
         return self.method
@@ -137,44 +138,8 @@ class HttpRequest:
     def get_path(self):
         return self.path
 
-    def get_request_lines(self):
-        return self.request_lines
-
     def get_body(self):
         return self.body
-
-    def read_body(self, socket):
-        content_length = 0
-        for header in self.request_lines:
-            if header.lower().startswith("content-length:"):
-                try:
-                    content_length = int(header.split(":", 1)[1].strip())
-                except ValueError:
-                    content_length = 0
-                break
-        
-        if content_length > 0:
-            self.body = socket.recv(content_length).decode('utf-8')
-
-    @staticmethod
-    def read_request(socket):
-        buffer = b""
-        while b"\r\n\r\n" not in buffer:
-            data = socket.recv(1024)
-            if not data:
-                return None
-            buffer += data
-        
-        request_str = buffer.decode('utf-8')
-        if not request_str:
-            return None
-        
-        lines = request_str.split("\r\n")
-        if not lines or len(lines[0].split()) < 2:
-            return None
-        
-        method, path = lines[0].split()[:2]
-        return HttpRequest(method.upper(), path, lines)
 
     def get_header(self, name):
         lower_name = name.lower()
@@ -189,6 +154,48 @@ class HttpRequest:
                 encodings = header[len("accept-encoding:"):].strip().lower()
                 return "gzip" in encodings
         return False
+
+    @staticmethod
+    def read_request(sock):
+        buffer = b""
+        while b"\r\n\r\n" not in buffer:
+            data = sock.recv(1024)
+            if not data:
+                return None
+            buffer += data
+        # Split headers and any initial body data.
+        header_part, sep, remainder = buffer.partition(b"\r\n\r\n")
+        request_str = header_part.decode('utf-8')
+        lines = request_str.split("\r\n")
+        if not lines or len(lines[0].split()) < 2:
+            return None
+        method, path = lines[0].split()[:2]
+        # Create HttpRequest with any body bytes that were already received.
+        return HttpRequest(method.upper(), path, lines, remainder.decode('utf-8', errors='replace'))
+
+    def read_body(self, sock):
+        # Determine required body length from Content-Length header.
+        content_length = 0
+        for header in self.request_lines:
+            if header.lower().startswith("content-length:"):
+                try:
+                    content_length = int(header.split(":", 1)[1].strip())
+                except ValueError:
+                    content_length = 0
+                break
+
+        # Get current body bytes (encoded as utf-8).
+        current_body_bytes = self.body.encode('utf-8')
+        needed = content_length - len(current_body_bytes)
+        body_bytes = bytearray(current_body_bytes)
+
+        while needed > 0:
+            data = sock.recv(needed)
+            if not data:
+                break
+            body_bytes.extend(data)
+            needed -= len(data)
+        self.body = body_bytes.decode('utf-8', errors='replace')
 
 class HttpResponse:
     def __init__(self):
