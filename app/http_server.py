@@ -63,11 +63,11 @@ class HttpServer:
                         response = "HTTP/1.1 404 Not Found\r\n\r\n"
                 else:
                     response = "HTTP/1.1 405 Method Not Allowed\r\n\r\n"
-            # Handle /echo endpoint with gzip support.
             elif path.startswith("/echo/"):
                 echo_body = path[len("/echo/"):]
                 accept_encoding = headers.get("accept-encoding", "")
                 if "gzip" in accept_encoding.lower():
+                    import gzip
                     compressed_body = gzip.compress(echo_body.encode("utf-8"))
                     response_header  = "HTTP/1.1 200 OK\r\n"
                     response_header += "Content-Type: text/plain\r\n"
@@ -84,12 +84,21 @@ class HttpServer:
                     client_socket.sendall(response_header.encode("utf-8") + body_bytes)
                 client_socket.close()
                 return
-            # Serve root and index endpoints as 200 OK.
+            elif path == "/user-agent":
+                # NEW: Handle /user-agent endpoint.
+                ua = headers.get("user-agent", "")
+                body_bytes = ua.encode("utf-8")
+                response_header  = "HTTP/1.1 200 OK\r\n"
+                response_header += "Content-Type: text/plain\r\n"
+                response_header += "Content-Length: " + str(len(body_bytes)) + "\r\n"
+                response_header += "\r\n"
+                client_socket.sendall(response_header.encode("utf-8") + body_bytes)
             elif path == "/" or path == "/index.html":
                 response = "HTTP/1.1 200 OK\r\n\r\n"
+                client_socket.sendall(response.encode("utf-8"))
             else:
                 response = "HTTP/1.1 404 Not Found\r\n\r\n"
-            client_socket.sendall(response.encode("utf-8"))
+                client_socket.sendall(response.encode("utf-8"))
         except Exception as err:
             print("Error handling request:", err)
         finally:
