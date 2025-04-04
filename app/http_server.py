@@ -69,46 +69,6 @@ class HttpServer:
         try:
             method, path, headers, body = self.read_http_request(client_socket)
             
-            # Add /user-agent endpoint handling
-            if path == "/user-agent":
-                user_agent = headers.get("user-agent", "")
-                body_bytes = user_agent.encode('utf-8')
-                response = "HTTP/1.1 200 OK\r\n"
-                response += "Content-Type: text/plain\r\n"
-                response += f"Content-Length: {len(body_bytes)}\r\n\r\n"
-                client_socket.sendall(response.encode('utf-8') + body_bytes)
-                return
-            
-            # Add root path handling at the start
-            if path == "/" or path == "/index.html":
-                response = "HTTP/1.1 200 OK\r\n\r\n"
-                client_socket.sendall(response.encode('utf-8'))
-                return
-                
-            if path.startswith("/echo/"):
-                # Extract the text to echo from the path
-                echo_text = path[len("/echo/"):]
-                # Check if client accepts gzip encoding
-                accept_encoding = headers.get("accept-encoding", "")
-                
-                if "gzip" in accept_encoding.lower():
-                    # Use gzip compression
-                    import gzip
-                    content = gzip.compress(echo_text.encode('utf-8'))
-                    response = "HTTP/1.1 200 OK\r\n"
-                    response += "Content-Type: text/plain\r\n"
-                    response += "Content-Encoding: gzip\r\n"
-                    response += f"Content-Length: {len(content)}\r\n\r\n"
-                    client_socket.sendall(response.encode('utf-8') + content)
-                else:
-                    # No compression
-                    content = echo_text.encode('utf-8')
-                    response = "HTTP/1.1 200 OK\r\n"
-                    response += "Content-Type: text/plain\r\n"
-                    response += f"Content-Length: {len(content)}\r\n\r\n"
-                    client_socket.sendall(response.encode('utf-8') + content)
-                return
-            
             if path.startswith("/files/"):
                 filename = path[len("/files/"):]
                 full_path = os.path.join(self.directory, filename) if self.directory else None
@@ -118,7 +78,7 @@ class HttpServer:
                         response = "HTTP/1.1 404 Not Found\r\n\r\n"
                     else:
                         try:
-                            # Write the request body to file
+                            # Write the request body to the specified file
                             with open(full_path, 'wb') as f:
                                 f.write(body.encode('utf-8'))
                             response = "HTTP/1.1 201 Created\r\n\r\n"
@@ -128,25 +88,9 @@ class HttpServer:
                     client_socket.sendall(response.encode('utf-8'))
                     return
                 
-                elif method.upper() == "GET":
-                    if full_path and os.path.isfile(full_path):
-                        try:
-                            with open(full_path, "rb") as f:
-                                content = f.read()
-                            response = "HTTP/1.1 200 OK\r\n"
-                            response += "Content-Type: application/octet-stream\r\n"
-                            response += f"Content-Length: {len(content)}\r\n\r\n"
-                            client_socket.sendall(response.encode('utf-8') + content)
-                        except Exception as e:
-                            print(f"Error reading file: {e}")
-                            response = "HTTP/1.1 500 Internal Server Error\r\n\r\n"
-                            client_socket.sendall(response.encode('utf-8'))
-                    else:
-                        response = "HTTP/1.1 404 Not Found\r\n\r\n"
-                        client_socket.sendall(response.encode('utf-8'))
-            else:
-                response = "HTTP/1.1 404 Not Found\r\n\r\n"
-                client_socket.sendall(response.encode('utf-8'))
+            # Handle other endpoints or return 404
+            response = "HTTP/1.1 404 Not Found\r\n\r\n"
+            client_socket.sendall(response.encode('utf-8'))
         except Exception as err:
             print(f"Error handling request: {err}")
             try:
